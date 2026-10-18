@@ -1,0 +1,688 @@
+#03 About 頁面 — Albert Einstein：穿越時空的科學思想展覽
+
+一、發想
+
+在決定這次 About 頁面的主題時，我首先思考的是：如果介紹的對象不只是一個人，而是一整套改變人類世界觀的思想，畫面應該如何呈現？
+
+最後，我選擇了阿爾伯特・愛因斯坦（Albert Einstein）。
+
+提到愛因斯坦，多數人第一時間想到的可能是相對論、E = mc²，或那張著名的吐舌頭照片。然而，真正開始蒐集資料後，我才發現他的科學貢獻遠比一條公式豐富。
+
+1905 年，當時仍在瑞士專利局工作的愛因斯坦，在一年內發表了多篇改變現代物理學的論文。他分別處理光量子、布朗運動、狹義相對論與質能等價等問題。十年後，他又完成廣義相對論，將重力重新解釋為物質與能量造成的時空彎曲。
+
+因此，這次的目標不是製作一張單純的人物履歷，而是打造一座能夠在手機上瀏覽的「愛因斯坦數位展覽」。使用者可以從人物主視覺進入，閱讀他的生平與研究風格，再進一步查看 1905 年原始論文、理論公式推導、生平時間線與世界地圖，逐步理解一位科學家的思想如何在不同年代、城市與問題之間形成。
+
+
+二、設計目標
+
+這次 App 的設計主要圍繞以下幾個目標：
+
+1. 讓大量文字內容仍然容易閱讀。
+2. 讓科學公式看起來像正式數學內容，而不是普通文字。
+3. 同時支援淺色與深色模式。
+4. 將人物、論文、理論、時間與地點整合在同一個 About 頁面。
+5. 透過動畫與手勢增加互動感，但不影響基本操作。
+6. 將介面拆成可重複使用的 SwiftUI View，避免程式碼全部集中在 ContentView。
+
+
+三、視覺設計：古典科學期刊與現代數位展覽
+
+整體視覺以「古典科學期刊」與「現代博物館展覽」作為設計方向。
+
+深藍色象徵夜空、宇宙與理論物理，因此成為深色模式與主要卡片的基礎色彩。淺色模式則使用略帶暖色的米白背景，模擬紙張與歷史文獻的質感。重要內容、公式與選取狀態使用金色強調，讓整體看起來更接近典藏展覽，而不是一般的資料列表。
+
+畫面也使用 .ultraThinMaterial 與 .regularMaterial。Material 會根據背景與系統外觀自動調整，使卡片在淺色及深色模式下都保有半透明層次。
+
+
+四、首頁主視覺
+
+首頁最上方使用愛因斯坦人物插畫作為 Hero Image，並將人物名稱、年代與代表公式疊放在圖片上。
+
+程式碼：
+
+ZStack(alignment: .bottomLeading) {
+    ZoomablePortrait()
+
+    LinearGradient(
+        stops: [
+            .init(
+                color: Color.einsteinNavy.opacity(0.08),
+                location: 0
+            ),
+            .init(
+                color: Color.einsteinNavy.opacity(0.96),
+                location: 0.88
+            ),
+            .init(
+                color: Color.einsteinNavy,
+                location: 1
+            )
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    VStack(alignment: .leading, spacing: 18) {
+        Text("FIELD NOTES · ISSUE 01")
+        Text("ALBERT\nEINSTEIN")
+        Text("1879—1955")
+
+        LaTeXText(
+            latex: #"E = mc^{2}"#,
+            pointSize: 24,
+            weight: .bold,
+            color: UIColor(Color.einsteinGold)
+        )
+    }
+}
+
+底部漸層能提高白色標題的可讀性，同時保留人物插畫上半部的細節。人物主圖還使用 SpacetimePortraitShape 自訂裁切輪廓，讓 Hero 區塊不只是普通的矩形，也呼應廣義相對論中的時空彎曲概念。
+
+
+五、可縮放的人物圖片
+
+為了讓首頁圖片不只是靜態背景，我另外建立 ZoomablePortrait。
+
+人物圖片支援：
+
+・雙指放大與縮小
+・放大後單指拖曳
+・雙擊快速放大
+・再次雙擊完整還原
+・VoiceOver 自訂放大與還原動作
+
+程式碼：
+
+struct ZoomablePortrait: View {
+    @State private var scale: CGFloat = 1
+    @State private var storedScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var storedOffset: CGSize = .zero
+
+    private let minimumScale: CGFloat = 1
+    private let maximumScale: CGFloat = 4
+
+    var body: some View {
+        Image("EinsteinPortrait")
+            .resizable()
+            .scaledToFit()
+            .scaleEffect(scale)
+            .offset(offset)
+            .simultaneousGesture(magnifyGesture)
+            .simultaneousGesture(dragGesture)
+            .onTapGesture(count: 2) {
+                withAnimation(.smooth(duration: 0.35)) {
+                    if scale > minimumScale {
+                        resetTransform()
+                    } else {
+                        scale = 2
+                        storedScale = 2
+                    }
+                }
+            }
+    }
+}
+
+圖片位於垂直 ScrollView 內，因此最大的挑戰是避免拖曳手勢與頁面上下捲動發生衝突。我的處理方式是讓拖曳只在圖片放大後生效；原始比例時，使用者仍然可以自然地上下捲動頁面。
+
+
+六、使用 ScrollView 建立完整介紹頁面
+
+整個 About 頁面使用垂直 ScrollView，讓人物資料、論文、理論、時間線與地圖可以依序排列。外層再搭配 ScrollViewReader，讓章節選單可以控制畫面捲動到指定位置。
+
+程式碼：
+
+ScrollViewReader { proxy in
+    ScrollView {
+        LazyVStack(spacing: 0) {
+            ImmersiveHeroSection()
+
+            CuratedBiographyContent(
+                onSelectTheory: { theory in
+                    selectedTheory = theory
+                },
+                onSelectPaper: { paper in
+                    selectedPaper = paper
+                }
+            )
+        }
+    }
+}
+
+LazyVStack 只會在需要時建立畫面內容，適合用來顯示篇幅較長的介紹頁面。
+
+
+七、章節導覽
+
+因為 App 內含人物資料、論文、理論、時間線與地圖，整體頁面長度較長，因此我在左上角加入章節導覽功能。
+
+選單包含：
+
+・人物資料
+・原始論文
+・理論實驗室
+・生平時間線
+・世界座標
+
+程式碼：
+
+SectionNavigationMenu { section in
+    withAnimation(.smooth) {
+        proxy.scrollTo(section, anchor: .top)
+    }
+}
+
+章節資料使用 enum 管理：
+
+enum BiographySection: String, CaseIterable, Identifiable {
+    case profile
+    case papers
+    case theories
+    case timeline
+    case map
+
+    var id: String {
+        rawValue
+    }
+}
+
+透過 CaseIterable，選單可以使用 ForEach 自動產生所有章節，不需要逐項重複建立按鈕。
+
+
+八、使用 Property 建立可重複使用的 View
+
+每個章節都需要英文眉題、中文標題與副標題，因此我建立共用的 SectionHeader。
+
+程式碼：
+
+struct SectionHeader: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(eyebrow.uppercased())
+                .font(.einsteinCaption.bold())
+                .foregroundStyle(Color.einsteinGold)
+
+            Text(title)
+                .font(.einsteinLargeTitle)
+
+            Text(subtitle)
+                .font(.einsteinBody)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+使用時只需要傳入不同資料：
+
+SectionHeader(
+    eyebrow: "A life across continents",
+    title: "愛因斯坦的世界座標",
+    subtitle: "探索塑造其人生與科學工作的五座城市。"
+)
+
+人物資料卡、論文卡片、理論卡片、時間線事件、地圖標記與公式步驟，也都使用相同的參數化概念。
+
+
+九、1905 年原始論文
+
+1905 年經常被稱為愛因斯坦的「奇蹟年」。這一年，他從光、原子、時間與能量等不同方向改變現代物理學。
+
+每張論文卡片包含：
+
+・論文編號
+・中文名稱
+・代表圖示
+・主題色彩
+・開啟完整內容的提示
+
+點擊卡片後，使用 .sheet(item:) 開啟詳細頁：
+
+.sheet(item: $selectedPaper) { paper in
+    ScientificPaperDetailScreen(paper: paper)
+}
+
+論文詳細頁包含中英文名稱、投稿與出版時間、期刊資訊、研究問題、論證結構、核心方程、完整章節、結論及歷史影響。
+
+
+十、Markdown DOI 連結
+
+論文詳細頁提供 DOI 原始文獻連結，使用 SwiftUI Text 直接解析 Markdown。
+
+程式碼：
+
+Text(
+    .init(
+        "[開啟 DOI 原始論文](https://doi.org/\(paper.doi))"
+    )
+)
+.foregroundStyle(paper.accent)
+
+使用者點擊文字後即可開啟對應的 DOI 頁面，也完整達成作業列出的 Markdown 加分項。
+
+
+十一、理論實驗室
+
+理論實驗室目前收錄：
+
+1. 光量子與光電效應
+2. 布朗運動
+3. 狹義相對論
+4. 質能等價
+5. 廣義相對論
+6. 玻色—愛因斯坦統計
+7. 重力波
+
+每一頁都依照相同結構排列：
+
+・理論要解決的問題
+・前提與適用條件
+・分步公式推導
+・每一步的物理解釋
+・最終結論
+・符號定義
+
+推導步驟使用資料模型管理：
+
+struct DerivationStep: Identifiable {
+    let id: String
+    let title: String
+    let equation: String
+    let explanation: String
+}
+
+例如光電效應的能量守恆：
+
+DerivationStep(
+    id: "p2",
+    title: "能量守恆",
+    equation: "hν = φ + Kₘₐₓ",
+    explanation: "吸收的能量先支付逸出功 φ，剩餘部分成為電子最大動能。"
+)
+
+將資料與畫面分離後，七個理論可以共用同一套詳細頁，不需要分別建立七套介面。
+
+
+十二、LaTeX 數學公式排版
+
+一般 Text 難以完整呈現數學上下標、希臘字母與特殊運算符，因此我建立專用的 LaTeXText。
+
+程式碼：
+
+LaTeXText(
+    latex: step.equation,
+    pointSize: 20,
+    weight: .semibold,
+    color: UIColor(accent)
+)
+.frame(maxWidth: .infinity, alignment: .leading)
+.padding(14)
+.background(
+    Color.einsteinNavy,
+    in: RoundedRectangle(
+        cornerRadius: 14,
+        style: .continuous
+    )
+)
+
+LaTeXText 可以處理上標、下標、希臘字母、根號、分數語法、特殊運算符與多行公式，使 E = mc²、γ、φ、ν、Δτ 與 Kmax 等內容更接近正式數學文件。
+
+
+十三、生平時間線
+
+時間線區塊使用 LazyVStack 顯示愛因斯坦一生的重要事件。每筆事件包含年份、事件名稱、詳細說明、時間節點與連接線。
+
+我使用 ZStack、Circle 與 Rectangle 建立時間軸，而不是直接使用一般清單。金色圓點代表重要年份，垂直線將不同事件連接起來，使使用者可以自然地由上往下閱讀。
+
+
+十四、MapKit 世界座標
+
+愛因斯坦的一生經歷多次遷徙，因此我使用 MapKit 標記五座重要城市：
+
+・烏爾姆：出生地
+・蘇黎世：求學、博士研究與任教
+・伯恩：專利局與 1905 奇蹟年
+・柏林：廣義相對論與學術高峰
+・普林斯頓：流亡、統一場論與晚年
+
+地點資料使用自訂型別：
+
+struct EinsteinPlace: Identifiable {
+    let id: String
+    let name: String
+    let period: String
+    let significance: String
+    let coordinate: CLLocationCoordinate2D
+}
+
+地圖使用自訂 Annotation：
+
+Map(position: $cameraPosition) {
+    if let selectedPlace {
+        Annotation(
+            selectedPlace.name,
+            coordinate: selectedPlace.coordinate,
+            anchor: .bottom
+        ) {
+            EinsteinMapPin(
+                number: selectedNumber,
+                place: selectedPlace
+            )
+        }
+    }
+}
+.mapControls {
+    MapCompass()
+    MapScaleView()
+}
+
+點選城市卡片後，鏡頭會平滑移動：
+
+.onChange(of: selectedPlaceID) {
+    guard let selectedPlace else {
+        return
+    }
+
+    withAnimation(.smooth(duration: 0.65)) {
+        cameraPosition = .region(
+            MKCoordinateRegion(
+                center: selectedPlace.coordinate,
+                span: MKCoordinateSpan(
+                    latitudeDelta: 4.5,
+                    longitudeDelta: 4.5
+                )
+            )
+        )
+    }
+}
+
+
+十五、一般模式與 Dark Mode
+
+App 支援跟隨系統、淺色模式與深色模式。
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+}
+
+使用 @AppStorage 保存選擇：
+
+@AppStorage("appAppearance")
+private var appearance = AppAppearance.system
+
+最後套用到整個畫面：
+
+.preferredColorScheme(appearance.colorScheme)
+
+即使 App 關閉後重新啟動，也會保留上一次的外觀模式。
+
+右上角圖示提供兩種操作：點擊快速切換淺色與深色；長按顯示完整的外觀選單。
+
+
+十六、SF Symbol Animation
+
+為了增加操作回饋，章節按鈕使用 bounce 動畫：
+
+Image(systemName: "list.bullet")
+    .symbolEffect(
+        .bounce,
+        value: isShowingSections
+    )
+
+外觀圖示則搭配 replace 與 bounce：
+
+Image(systemName: selection.icon)
+    .contentTransition(
+        .symbolEffect(.replace)
+    )
+    .symbolEffect(
+        .bounce,
+        value: selection
+    )
+
+當外觀模式切換時，太陽與月亮圖示會自然替換並播放短暫的彈跳效果。
+
+
+十七、客製字型
+
+App 使用兩套客製字型：
+
+・中文：全字庫正楷體
+・英文與數字：Cormorant Garamond
+
+程式碼：
+
+enum EinsteinTypography {
+    static let displayFontName =
+        "CormorantGaramond-SemiBold"
+
+    static let chineseFontName =
+        "TW-Kai-98_1"
+
+    static func registerBundledFont() {
+        registerFont(
+            fileName: "CormorantGaramond-VariableFont_wght"
+        )
+
+        registerFont(
+            fileName: "TW-Kai-98_1"
+        )
+    }
+}
+
+透過字型 Cascade，英文與數字優先使用 Cormorant Garamond，中文則自動改用全字庫正楷體，不需要將同一段文字拆成多個 Text。
+
+
+十八、Dynamic Type
+
+客製字型透過 UIFontMetrics 支援 Dynamic Type：
+
+let scaledFont = UIFontMetrics(
+    forTextStyle: textStyle
+).scaledFont(for: cascadedFont)
+
+return Font(scaledFont)
+
+當使用者調整系統文字大小時，主要標題、內文與說明文字都能一起縮放。
+
+
+十九、Accessibility
+
+除了視覺效果，我也為互動元件加入 VoiceOver 支援。
+
+章節按鈕：
+
+.accessibilityLabel("章節導覽")
+.accessibilityHint(
+    "快速前往人物資料、論文、理論、時間線或地圖"
+)
+
+外觀模式：
+
+.accessibilityLabel("切換外觀模式")
+.accessibilityValue(Text(selection.title))
+.accessibilityHint(
+    "點兩下快速切換淺色與深色，長按顯示所有模式"
+)
+
+可縮放圖片：
+
+.accessibilityLabel(
+    "阿爾伯特・愛因斯坦人物插畫"
+)
+.accessibilityHint(
+    "雙擊放大或還原，也可使用雙指縮放與拖曳"
+)
+
+主要互動元件也維持至少 44 點的點擊範圍，使按鈕更容易操作。
+
+
+二十、模組化程式架構
+
+為了避免將所有內容都放在 ContentView，專案依功能拆分為多個檔案：
+
+ContentView.swift
+首頁、Hero、章節導覽與主要內容。
+
+AppearanceControls.swift
+亮暗模式及外觀選單。
+
+EinsteinComponents.swift
+共用元件、顏色與 ButtonStyle。
+
+EinsteinModels.swift
+人物資料與時間線模型。
+
+EinsteinPaperModels.swift
+1905 年論文資料。
+
+EinsteinTheoryModels.swift
+理論與推導步驟資料。
+
+ScientificPaperViews.swift
+論文卡片與完整內容頁。
+
+TheoryDerivationViews.swift
+理論詳細頁與公式推導。
+
+EinsteinMapView.swift
+MapKit 地圖、標記與城市卡片。
+
+EinsteinTypography.swift
+中英文字型、Dynamic Type 與自訂 Shape。
+
+LaTeXText.swift
+數學公式解析與顯示。
+
+將資料模型與 View 分離後，新增論文、理論或城市時，大多只需要加入新資料，而不需要重新設計整個畫面。
+
+
+二十一、使用到的 SwiftUI 技術
+
+・VStack
+・HStack
+・ZStack
+・Text
+・Image
+・ScrollView
+・ScrollViewReader
+・LazyVStack
+・LazyVGrid
+・ForEach
+・Button
+・Picker
+・Popover
+・Sheet
+・MapKit
+・Map
+・Annotation
+・Asset 圖片
+・SF Symbols
+・SF Symbol Animation
+・Markdown
+・自訂字型
+・自訂 Shape
+・@State
+・@Binding
+・@Environment
+・@AppStorage
+・preferredColorScheme
+・ultraThinMaterial
+・regularMaterial
+・symbolEffect
+・contentTransition
+・MagnifyGesture
+・DragGesture
+・simultaneousGesture
+・LaTeX 風格公式
+・Dynamic Type
+・VoiceOver Accessibility
+
+
+二十二、作業要求與加分功能
+
+必做項目：
+
+・使用 VStack、HStack、ZStack。
+・使用 Text 與 Image。
+・使用 ScrollView，畫面可以上下捲動。
+・同時使用 Asset 圖片與 SF Symbols。
+・使用多種 Modifier。
+・使用多個檔案定義 View。
+・使用 Property 客製可重複利用的 View。
+
+加分功能：
+
+・一般模式與 Dark Mode。
+・Text 搭配 Markdown 開啟連結。
+・MapKit 地圖功能。
+・客製字型。
+・自訂 Shape 圖片裁切。
+
+額外延伸：
+
+・LaTeX 風格公式排版。
+・雙指縮放。
+・圖片拖曳。
+・雙擊放大與還原。
+・SF Symbol Animation。
+・章節快速導覽。
+・論文與理論詳細頁。
+・Dynamic Type。
+・VoiceOver 支援。
+
+
+二十三、開發過程中的挑戰
+
+1. 大量內容如何保持易讀
+
+人物生平、論文與物理理論都有大量文字。如果全部直接放在首頁，畫面會變得非常密集。因此，我將首頁設計成展覽入口，先呈現摘要與卡片；需要深入閱讀的內容，再透過 Sheet 開啟完整詳細頁。
+
+2. 中英文字型無法直接統一
+
+單一客製字型通常無法同時完整支援中文、英文、數字與數學符號。因此我使用字型 Cascade：英文與數字優先使用 Cormorant Garamond，中文改用全字庫正楷體，公式交給獨立的數學排版元件。
+
+3. 圖片手勢與頁面捲動衝突
+
+圖片縮放功能位於 ScrollView 中，如果直接加入 DragGesture，可能會攔截上下捲動。因此我讓拖曳只在放大狀態生效，並使用 simultaneousGesture 協調多個手勢。
+
+4. 公式排版
+
+物理公式包含大量希臘字母、上下標與特殊運算符。一般 Text 難以呈現一致的數學效果，因此我建立獨立 LaTeXText，統一處理公式字型、比例、上下標與可存取性文字。
+
+5. 亮暗模式下的視覺一致性
+
+淺色與深色不能只更換背景顏色，卡片、文字、邊框、Material 與地圖周圍的對比也必須一起考慮。因此大部分文字使用 primary、secondary，卡片使用 Material 與低透明度色彩，使它們自動適應不同外觀。
+
+
+二十四、結語
+
+這次作品雖然以 About 頁面為起點，但在實作過程中，逐漸發展成一座完整的愛因斯坦數位展覽。
+
+它不只介紹愛因斯坦的姓名、生卒年份與代表成就，也嘗試回答：他當時想解決什麼問題？這些理論如何一步步形成？1905 年的論文為何重要？哪些城市影響了他的研究與人生？一條看似簡短的公式，背後又具有什麼物理意義？
+
+在開發過程中，我練習了 SwiftUI 的排版、資料傳遞、元件復用、MapKit、手勢、動畫、客製字型、亮暗模式與 Accessibility，也學習如何將大量資料整理成適合手機閱讀的內容層次。
+
+最後完成的成果不只是一個人物介紹頁，而是一個能夠閱讀、探索、縮放、切換與互動的科學展示空間。
+
+使用者從首頁的一張人物插畫開始，接著可以走進愛因斯坦的論文、公式、時間與世界座標，逐步理解他如何用思想實驗，重新改寫人類對宇宙的認識。
+
+
+二十五、成果展示
+
+操作展示影片：
+請放入 YouTube Shorts 連結
+
+GitHub 專案原始碼：
+請放入 GitHub Repository 連結
+
+開發工具：
+Xcode、Swift、SwiftUI、MapKit
+
+主題：
+Albert Einstein — Space, Time, Light and Thought
